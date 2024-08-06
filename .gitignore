@@ -1,3 +1,4 @@
 .ipynb_checkpoints
 train/saved_models/
 data_prep/dask*
+test/confvsacc/*
