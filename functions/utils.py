@@ -199,52 +199,84 @@ def split_SDbias(trainmems, valmem, testmem, months, lead):
     # open detrended & running mean-ed data
 
     # ------ X LOAD & SHIFT --------
+    if len(trainmems) > 1:
+        for m,mem in enumerate(trainmems):
+            pfiname = 'PRECT'+biasstr+'_mem'+str(mem)+'_7daymean_1950-2014_20S-20N_regrid2.5x2.5_polydetrend_allmems.nc'
+            X1xr = xr.open_dataarray(ppath+pfiname)[:-6][:-lead]
+    
+            if m == 0:
+                X1trainxr_NDJF = X1xr[X1xr.time.dt.month.isin(months)]
+            else:
+                X1trainxr_NDJF = xr.concat([X1trainxr_NDJF,X1xr[X1xr.time.dt.month.isin(months)]],dim='mem')
+    
+            del X1xr
+    
+            # ------ Y LOAD & SHIFT --------
+            zfiname = 'Z500_mem'+str(mem)+'_7daymean_1950-2014_30-60Nx170-240E_regrid2.5x2.5_polydetrend_allmems.nc'
+            Y1xr = xr.open_dataarray(zpath+zfiname)
+    
+            if m == 0:
+                # ----- grab precip time + LEAD -----
+                # ----------- (CESM doesn't include Feb 29th for leap years)
+                Y1_leadtime = []
+                for d in np.arange(len(X1trainxr_NDJF.time)):
+                    temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead)
+                    # if leap year and the day is after feburary 28th and before april (lead is okay for Nov-Dec)
+                    if calendar.isleap(temp.year) and temp.month in [2,3] and ((temp - pd.to_datetime(str(temp.year)+'-02-28')) > dt.timedelta(days = 0)):
+                        temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead+1)
+                    Y1_leadtime.append(temp)
+                Y1_leadtimexr = xr.DataArray(np.array(Y1_leadtime),dims='time',coords={'time':np.array(Y1_leadtime)})
+                # ----------------
+                Y1trainxr_NDJFM = Y1xr.where(Y1xr['time'] == Y1_leadtimexr, drop=True)
+            else:
+                Y1trainxr_NDJFM = xr.concat([Y1trainxr_NDJFM, Y1xr.where(Y1xr['time'] == Y1_leadtimexr, drop=True)],dim='mem')
+    
+            del Y1xr
 
-    for m,mem in enumerate(trainmems):
-        pfiname = 'PRECT'+biasstr+'_mem'+str(mem)+'_7daymean_1950-2014_20S-20N_regrid2.5x2.5_polydetrend_allmems.nc'
+        # get training & standardize
+        X1trainxr_NDJF = X1trainxr_NDJF.stack(s=('mem','time')).transpose('s','lat','lon')
+        X1trainxr_NDJF = X1trainxr_NDJF.reset_index(['s'])
+    
+        X1train_mean = X1trainxr_NDJF.mean('s')#['s','lat','lon'])
+        X1train_std  = X1trainxr_NDJF.std('s')#['s','lat','lon'])
+
+        # get training & standardize
+        Y1trainxr_NDJFM = Y1trainxr_NDJFM.stack(s=('mem','time'))
+        Y1train_med = Y1trainxr_NDJFM.quantile(q=0.5,dim='s',keep_attrs=True)
+        
+    elif len(trainmems) == 1:
+        print('made it!')
+        pfiname = 'PRECT'+biasstr+'_mem'+trainmems[0]+'_7daymean_1950-2014_20S-20N_regrid2.5x2.5_polydetrend_allmems.nc'
         X1xr = xr.open_dataarray(ppath+pfiname)[:-6][:-lead]
-
-        if m == 0:
-            X1trainxr_NDJF = X1xr[X1xr.time.dt.month.isin(months)]
-        else:
-            X1trainxr_NDJF = xr.concat([X1trainxr_NDJF,X1xr[X1xr.time.dt.month.isin(months)]],dim='mem')
-
-        del X1xr
+        X1trainxr_NDJF = X1xr[X1xr.time.dt.month.isin(months)]            
 
         # ------ Y LOAD & SHIFT --------
-        zfiname = 'Z500_mem'+str(mem)+'_7daymean_1950-2014_30-60Nx170-240E_regrid2.5x2.5_polydetrend_allmems.nc'
+        zfiname = 'Z500_mem'+trainmems[0]+'_7daymean_1950-2014_30-60Nx170-240E_regrid2.5x2.5_polydetrend_allmems.nc'
         Y1xr = xr.open_dataarray(zpath+zfiname)
 
-        if m == 0:
-            # ----- grab precip time + LEAD -----
-            # ----------- (CESM doesn't include Feb 29th for leap years)
-            Y1_leadtime = []
-            for d in np.arange(len(X1trainxr_NDJF.time)):
-                temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead)
-                # if leap year and the day is after feburary 28th and before april (lead is okay for Nov-Dec)
-                if calendar.isleap(temp.year) and temp.month in [2,3] and ((temp - pd.to_datetime(str(temp.year)+'-02-28')) > dt.timedelta(days = 0)):
-                    temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead+1)
-                Y1_leadtime.append(temp)
-            Y1_leadtimexr = xr.DataArray(np.array(Y1_leadtime),dims='time',coords={'time':np.array(Y1_leadtime)})
-            # ----------------
-            Y1trainxr_NDJFM = Y1xr.where(Y1xr['time'] == Y1_leadtimexr, drop=True)
-        else:
-            Y1trainxr_NDJFM = xr.concat([Y1trainxr_NDJFM, Y1xr.where(Y1xr['time'] == Y1_leadtimexr, drop=True)],dim='mem')
+        # ----- grab precip time + LEAD -----
+        # ----------- (E3SM doesn't include Feb 29th for leap years)
+        Y1_leadtime = []
+        for d in np.arange(len(X1trainxr_NDJF.time)):
+            temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead)
+            # if leap year and the day is after feburary 28th and before april (lead is okay for Nov-Dec)
+            if calendar.isleap(temp.year) and temp.month in [2,3] and ((temp - pd.to_datetime(str(temp.year)+'-02-28')) > dt.timedelta(days = 0)):
+                temp = pd.to_datetime(X1trainxr_NDJF.time)[d] + dt.timedelta(days = lead+1)
+            Y1_leadtime.append(temp)
+        Y1_leadtimexr = xr.DataArray(np.array(Y1_leadtime),dims='time',coords={'time':np.array(Y1_leadtime)})
+        # ----------------
+        Y1trainxr_NDJFM = Y1xr.where(Y1xr['time'] == Y1_leadtimexr, drop=True)
+        
+        # get training & standardize
+        X1train_mean = X1trainxr_NDJF.mean('time')
+        X1train_std  = X1trainxr_NDJF.std('time')
+        
+        # get training & standardize\
+        Y1train_med = Y1trainxr_NDJFM.quantile(q=0.5,dim='time',keep_attrs=True)
 
-        del Y1xr
-    # ---------------------------------------------------
-
-
-    # ----------- SPLIT data --------------------------------- 
-    # ----------------- X split -------------------
-    # get training & standardize
-    X1trainxr_NDJF = X1trainxr_NDJF.stack(s=('mem','time')).transpose('s','lat','lon')
-    X1trainxr_NDJF = X1trainxr_NDJF.reset_index(['s'])
-
-    X1train_mean = X1trainxr_NDJF.mean('s')#['s','lat','lon'])
-    X1train_std  = X1trainxr_NDJF.std('s')#['s','lat','lon'])
 
     X1train = (X1trainxr_NDJF - X1train_mean)/X1train_std
+    Y1train = Y1trainxr_NDJFM - Y1train_med
 
     # get validation & standardize
     pfiname = 'PRECT'+biasstr+'_mem'+str(valmem)+'_7daymean_1950-2014_20S-20N_regrid2.5x2.5_polydetrend_allmems.nc'
@@ -262,12 +294,6 @@ def split_SDbias(trainmems, valmem, testmem, months, lead):
 
 
     # ----------------- Y split -------------------
-    # get training & standardize
-    Y1trainxr_NDJFM = Y1trainxr_NDJFM.stack(s=('mem','time'))
-
-    Y1train_med = Y1trainxr_NDJFM.quantile(q=0.5,dim='s',keep_attrs=True)
-    Y1train = Y1trainxr_NDJFM - Y1train_med
-
     # get validation & standardize
     zfiname = 'Z500_mem'+str(valmem)+'_7daymean_1950-2014_30-60Nx170-240E_regrid2.5x2.5_polydetrend_allmems.nc'
     Y1xr = xr.open_dataarray(zpath+zfiname)
