@@ -185,7 +185,11 @@ def balance_classes(Xdata, Ydata):
         Ydata  = Ydata.isel(time = inew,drop=True) 
         Xdata  = Xdata.isel(time = inew,drop=True)
         
+    else:
+        inew = []
+        
     return Xdata,Ydata,inew
+
 
 
 

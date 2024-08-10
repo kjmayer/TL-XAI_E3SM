@@ -3,3 +3,5 @@ train/saved_models/
 data_prep/dask*
 test/confvsacc/*
 functions/__pycache__/*
+plot_scripts/plots/
+IG/data/*
