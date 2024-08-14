@@ -5,3 +5,5 @@ test/confvsacc/*
 functions/__pycache__/*
 plot_scripts/plots/
 IG/data/*
+CNNcheck/saved_models/*
+CNNcheck/confvsacc/*
