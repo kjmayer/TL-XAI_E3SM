@@ -7,3 +7,5 @@ plot_scripts/plots/
 IG/data/*
 CNNcheck/saved_models/*
 CNNcheck/confvsacc/*
+CNNcheck/plots/*
+CNNcheck/IG_data/*
