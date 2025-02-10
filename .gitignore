@@ -9,3 +9,12 @@ CNNcheck/saved_models/*
 CNNcheck/confvsacc/*
 CNNcheck/plots/*
 CNNcheck/IG_data/*
+train/kerastuner_hpsearch/saved_models/*
+train/kerastuner_hpsearch/saved_models/kfold/*
+train/kerastuner_hpsearch/hp_results/hp_*
+train/kerastuner_hpsearch/*.png
+reanalysis/train/kerastuner_hpsearch/hp_results/*
+reanalysis/train/saved_models/*
+reanalysis/plot_scripts/plots/*
+reanalysis/test/confvsacc/*
+reanalysis/__pycache__/*
